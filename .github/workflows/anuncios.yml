@@ -1,0 +1,56 @@
+name: Anúncios Meta
+
+on:
+  schedule:
+    # Relatório todo dia às 8h (Brasília). Só lê números: não cria, não liga e não gasta nada.
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "check | simular | criar (cria PAUSADO) | ativar (começa a gastar) | pausar | relatorio"
+        required: true
+        default: check
+        type: choice
+        options: [check, simular, criar, ativar, pausar, relatorio]
+      nome:
+        description: "Nome do anúncio (igual ao anuncios.json). Obrigatório para ativar; em pausar, vazio = pausa todos."
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ads-bot
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Anúncios
+        env:
+          META_PAGE_TOKEN: ${{ secrets.META_PAGE_TOKEN }}
+          META_AD_ACCOUNT: ${{ secrets.META_AD_ACCOUNT }}
+          META_PAGE_ID: ${{ secrets.META_PAGE_ID }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
+          MODE: ${{ github.event.inputs.mode || 'relatorio' }}
+          NOME: ${{ github.event.inputs.nome }}
+        run: |
+          if [ -n "$NOME" ]; then python anuncios.py --$MODE --nome "$NOME"; else python anuncios.py --$MODE; fi
+      - name: Registrar
+        if: always()
+        run: |
+          if [ -n "$(git status --porcelain anuncios_estado.json 2>/dev/null)" ]; then
+            git config user.name "walter-robo"
+            git config user.email "walter-robo@users.noreply.github.com"
+            git add anuncios_estado.json
+            git commit -m "Anúncios: $MODE $(TZ=America/Sao_Paulo date '+%F %H:%M')"
+            for i in 1 2 3 4 5; do git pull --rebase -q && git push && break; sleep 5; done
+          fi
+        env:
+          MODE: ${{ github.event.inputs.mode || 'relatorio' }}

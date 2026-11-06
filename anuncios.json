@@ -1,0 +1,18 @@
+[
+  {
+    "nome": "site-trafego-500",
+    "post": "2026-11-10 18:00",
+    "orcamento_diario": 20,
+    "inicio": "2026-11-11",
+    "fim": "2026-11-17",
+    "local": {
+      "nome": "Brasília",
+      "lat": -15.7939,
+      "lng": -47.8828,
+      "raio_km": 30
+    },
+    "idade_min": 25,
+    "idade_max": 60,
+    "publico_automatico": false
+  }
+]
