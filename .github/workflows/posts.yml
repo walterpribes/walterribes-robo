@@ -1,18 +1,20 @@
 name: Posts @walterribestrafego
 
+# O agendamento do GitHub atrasa e pula execuções quando está cheio. Por isso quem publica é o
+# VIGIA: ele fica ligado ~5h40, publica cada post na hora certa, confere no Instagram a cada 30 min
+# se os posts dos últimos 3 dias estão no ar e recupera o que não saiu. No fim ele mesmo se religa.
+# O agendamento de hora em hora abaixo só serve pra religar o vigia se a corrente parar.
 on:
   schedule:
-    # A cada 15 min, das 7h às 22h45 (Brasília). O GitHub pode atrasar; o robô publica o que estiver
-    # na hora ou atrasado no dia, e nunca publica o mesmo post duas vezes.
-    - cron: "*/15 10-23,0-1 * * *"
+    - cron: "23 * * * *"
   workflow_dispatch:
     inputs:
       mode:
-        description: "check = conferir token | dry-run = testar o próximo post sem publicar | publish = publicar o que está na hora"
+        description: "vigia = ligar o vigia (padrão) | check = conferir token | dry-run = testar sem publicar | publish = publicar o que está na hora"
         required: true
-        default: check
+        default: vigia
         type: choice
-        options: [check, dry-run, publish]
+        options: [vigia, check, dry-run, publish]
       date:
         description: "Opcional: publicar AGORA o post deste dia (ex.: 2026-11-10). Use com mode = publish."
         required: false
@@ -24,6 +26,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: posts-bot
@@ -32,24 +35,31 @@ concurrency:
 jobs:
   run:
     runs-on: ubuntu-latest
+    timeout-minutes: 355
+    env:
+      MODE: ${{ github.event.inputs.mode || 'vigia' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Publicar
+        id: run
         env:
           META_PAGE_TOKEN: ${{ secrets.META_PAGE_TOKEN }}
           META_PAGE_ID: ${{ secrets.META_PAGE_ID }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
-          MODE: ${{ github.event.inputs.mode || 'publish' }}
           DAY: ${{ github.event.inputs.date }}
           HORA: ${{ github.event.inputs.time }}
         run: |
+          echo "inicio=$(date +%s)" >> "$GITHUB_OUTPUT"
+          git config user.name "walter-robo"
+          git config user.email "walter-robo@users.noreply.github.com"
           ARGS=""
           [ -n "$DAY" ] && ARGS="$ARGS --date $DAY"
           [ -n "$HORA" ] && ARGS="$ARGS --time $HORA"
           case "$MODE" in
+            vigia)   python vigia.py --horas 5.6 ;;
             check)   python postar.py --check ;;
             dry-run) python postar.py --dry-run $ARGS ;;
             *)       python postar.py $ARGS ;;
@@ -58,9 +68,19 @@ jobs:
         if: always()
         run: |
           if [ -n "$(git status --porcelain publicados.json 2>/dev/null)" ]; then
-            git config user.name "walter-robo"
-            git config user.email "walter-robo@users.noreply.github.com"
             git add publicados.json
             git commit -m "Registro de publicação $(TZ=America/Sao_Paulo date '+%F %H:%M')"
             for i in 1 2 3 4 5; do git pull --rebase -q && git push && break; sleep 5; done
+          fi
+      - name: Religar o vigia
+        if: always() && env.MODE == 'vigia'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          dur=$(( $(date +%s) - ${{ steps.run.outputs.inicio || 0 }} ))
+          if [ "$dur" -ge 1200 ]; then
+            gh api -X POST "repos/${{ github.repository }}/actions/workflows/posts.yml/dispatches" -f ref=main -f "inputs[mode]=vigia"
+            echo "Vigia religado."
+          else
+            echo "O vigia parou cedo (${dur}s). Não religo agora pra não ficar em loop; o agendamento de hora em hora tenta de novo."
           fi
