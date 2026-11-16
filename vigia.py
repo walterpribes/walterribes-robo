@@ -146,11 +146,34 @@ def proxima_parada(sched, ultima_conf):
     return max(alvo, now + dt.timedelta(seconds=20))
 
 
+def calcular_fim(inicio, horas, limite=5.85, folga=dt.timedelta(minutes=75)):
+    """A troca de turno pode levar até ~50 min no GitHub. Nunca encerra perto de um horário de post:
+    se tiver post logo depois do fim, fica pra publicar e sai em seguida; se não der tempo, sai antes."""
+    fim = inicio + dt.timedelta(hours=horas)
+    teto = inicio + dt.timedelta(hours=limite)
+    try:
+        sched = json.load(open(os.path.join(ROOT, "posts.json"), encoding="utf-8"))
+    except Exception:
+        return fim
+    cedo = False
+    for _ in range(20):
+        prox = sorted(q for q in (quando(s) for s in sched) if fim < q < fim + folga)
+        if not prox:
+            return fim
+        ultimo = prox[-1]  # pega o grupo inteiro (ex.: post 7:00 + story 7:01 + reel 7:30)
+        if not cedo and ultimo + dt.timedelta(minutes=3) <= teto:
+            fim = ultimo + dt.timedelta(minutes=3)
+        else:
+            cedo = True  # daqui pra frente só antecipa
+            fim = prox[0] - folga
+    return fim
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--horas", type=float, default=5.6)
     a = ap.parse_args()
-    fim = agora() + dt.timedelta(hours=a.horas)
+    fim = calcular_fim(agora(), a.horas)
     log(f"Vigia ligado até {fim:%d/%m %H:%M}.")
 
     ig_id = page_id = None
