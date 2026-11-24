@@ -1038,6 +1038,15 @@
  },
  {
   "date": "2026-11-29",
+  "time": "08:00",
+  "tipo": "post",
+  "arquivos": [
+   "media/frases/frase-11.jpg"
+  ],
+  "legenda": "Seja a pessoa que acolhe, ajuda e inspira. O resto é barulho. 💚\n\n#empreendedorismo #motivacao #negocios #brasilia"
+ },
+ {
+  "date": "2026-11-29",
   "time": "09:00",
   "tipo": "carrossel",
   "arquivos": [
